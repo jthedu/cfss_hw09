@@ -1,0 +1,50 @@
+---
+title: "HW09: Analyzing sentiment of Daily Mail coverage on Meghan Markle"
+author: "Julia Du"
+date: "`r lubridate::today()`"
+output: 
+  github_document:
+    toc: true
+---
+
+## Load necessary libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(glue)
+
+theme_set(theme_minimal())
+```
+
+## Overview
+
+https://discuss.analyticsvidhya.com/t/how-to-remove-value-from-a-vector-in-r/2975/3
+```{r mail}
+mail <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html")
+
+mail_nodes <- html_nodes(mail, ".sport span , #content p, .linkro-ccow, .linkro-darkred a")
+# use "p , .linkro-darkred a" to get w/o date
+
+mail_vec <- mail_nodes %>%
+  html_text()
+# could've just used "Sports" - ask TA abt sensitivity to specific "" in str_detecct
+
+mail_vec <- 
+  mail_vec[c(-1, -400)] %>%
+  append(c("", ""), after = 2) #adding spaces so that each article is divided into 5 elements
+
+almost_mail <- mail_vec %>%
+  split(ceiling(seq_along(mail_vec)/5)) %>%
+  as_tibble() %>%
+  filter(!(. =="")) %>% # removing blank rows from all article columns
+  mutate(id = c("title", "date", "preview"), .before = 1)
+
+almost_mail %>%
+#  mutate(row = row_number()) %>%
+  pivot_longer(-id, names_to = "recent_order", values_to = "values") %>%
+  pivot_wider(names_from = id, values_from = values)
+  
+```
+
