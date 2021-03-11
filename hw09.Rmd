@@ -22,6 +22,9 @@ theme_set(theme_minimal())
 
 https://discuss.analyticsvidhya.com/t/how-to-remove-value-from-a-vector-in-r/2975/3
 ```{r mail}
+# create folder to store local copies of df
+dir.create("./data")
+
 mail <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html")
 
 mail_nodes <- html_nodes(mail, ".sport span , #content p, .linkro-ccow, .linkro-darkred a")
@@ -37,14 +40,26 @@ mail_vec <-
 
 almost_mail <- mail_vec %>%
   split(ceiling(seq_along(mail_vec)/5)) %>%
-  as_tibble() %>%
-  filter(!(. =="")) %>% # removing blank rows from all article columns
-  mutate(id = c("title", "date", "preview"), .before = 1)
+  as_tibble() 
+
+# stores local copy of dataframe
+almost_mail %>%
+  write_csv("./data/mail_210310.6pm.csv")
 
 almost_mail %>%
+  filter(!(. =="")) %>% # removing blank rows from all article columns
+  mutate(id = c("title", "date", "preview"), .before = 1) %>%
 #  mutate(row = row_number()) %>%
   pivot_longer(-id, names_to = "recent_order", values_to = "values") %>%
   pivot_wider(names_from = id, values_from = values)
   
 ```
 
+then can break the headline into tokens & look at sentiment. try and also find words correlated w/ Meghan Markle
+then do same thing for preview
+
+## Session info
+
+```{r, echo = TRUE}
+devtools::session_info()
+```
