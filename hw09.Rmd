@@ -25,7 +25,7 @@ https://discuss.analyticsvidhya.com/t/how-to-remove-value-from-a-vector-in-r/297
 # create folder to store local copies of df
 dir.create("./data")
 
-mail <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html")
+#mail <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html")
 
 mail_nodes <- html_nodes(mail, ".sport span , #content p, .linkro-ccow, .linkro-darkred a")
 # use "p , .linkro-darkred a" to get w/o date
@@ -48,15 +48,48 @@ almost_mail %>%
 
 almost_mail %>%
   filter(!(. =="")) %>% # removing blank rows from all article columns
+  # could use transpose here instead of pivot commands below (just t() & then as_tibble() in pipe)
   mutate(id = c("title", "date", "preview"), .before = 1) %>%
 #  mutate(row = row_number()) %>%
   pivot_longer(-id, names_to = "recent_order", values_to = "values") %>%
   pivot_wider(names_from = id, values_from = values)
-  
+
 ```
 
 then can break the headline into tokens & look at sentiment. try and also find words correlated w/ Meghan Markle
 then do same thing for preview
+
+do something similar w/ Reddit jokes & see which words pop up most frequently, try to find the most common topics
+or also the correlated words -- think Hamilton? or Trump tweet examples
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+vec_3.12_2pm <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html") %>%
+  html_nodes(".sport span , #content p, .linkro-ccow, .linkro-darkred a") %>%
+  html_text() 
+
+vec_3.12_2pm <-
+  vec_3.12_2pm[c(-1, -400)] %>%
+  append(c("", ""), after = 2) 
+
+data_3.12_2pm <- vec_3.12_2pm %>%
+  split(ceiling(seq_along(vec_3.12_2pm)/5)) %>%
+  as_tibble()
+
+data_3.12_2pm %>%
+  write_csv("./data/mail_210312.2pm.csv")
+
+```
 
 ## Session info
 
