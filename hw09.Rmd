@@ -18,8 +18,16 @@ library(glue)
 library(tidytext)
 library(reshape2)
 library(wordcloud)
+library(widyr)
+library(ggraph)
+library(igraph)
+
+library(textrecipes)
+library(topicmodels)
 
 theme_set(theme_minimal())
+set.seed(123)
+
 ```
 
 ## Overview
@@ -95,7 +103,7 @@ combined_word %>%
 # still not very informative
 ```
 
-## sentiment analysis of titles
+## sentiment analysis
 
 ```{r}
 bing_word <- combined_word %>%
@@ -119,25 +127,119 @@ combined_word %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
-  comparison.cloud(colors = c("gray20", "gray80"), max.words = 30)
+  comparison.cloud(colors = c("tomato", "cadetblue1"), 
+                   max.words = 30, title.bg.colors = c("tomato", "cadetblue1")) 
+# color reference: http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
   
 ```
 
-merge title & preview columns?
+drawn heavily from: https://www.tidytextmining.com/ngrams.html#visualizing-bigrams-in-other-texts
 
 do pairwise correlation?
 
 ##
 ```{r}
+word_cors <- combined_word %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(item = word, feature = recent_order, sort = TRUE)
+# looking at the common pairs of words co-appearing w/in each article (as defined by recent_order)
+
+word_cors %>%
+  filter(item1 %in% c("meghan", "harry")) %>%
+  group_by(item1) %>%
+  slice_head(n = 6) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(mapping = aes(x = item2, y = correlation)) +
+  geom_col() +
+  facet_wrap(~ item1, scales = "free") +
+  coord_flip()
+
+word_cors %>%
+  filter(correlation > .1) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  ggtitle("Word pairs with at least a correlation of .1 appearing in the same article")
+  theme_void()
+```
+
+not helpful. we're very limited in what we can do w/ just the title & 1st sent of an article, just not enough data to draw meaningful conclusions
+
+# topic modeling
+https://cfss.uchicago.edu/notes/topic-modeling/
+
+```{r}
+tidy_mail
+
+custom_stop_vec <- custom_stop %>%
+  pull(word)
+
+mail_rec <- recipe(~., data = tidy_mail) %>%
+  # even though already pre-processed data into combined_mail, 
+  #redo tokenize/stopwords steps for tidy_mail so that R recognizes tokenized columns as tokenized
+  step_tokenize(title, preview) %>%
+  step_tokenmerge(title, preview, prefix = "combined_text") %>%
+  step_stopwords(combined_text, custom_stopword_source = custom_stop_vec) %>%
+# PROBLEM - CAN'T GET STOPWORD_SOURCE TO RECOGNIZE BOTH custom & regular stopwords
+  
+  
+  step_ngram(combined_text, num_tokens = 3, min_num_tokens = 1) %>%
+  step_tokenfilter(combined_text, max_tokens = 2500) %>%
+  step_tf(combined_text)
+
+mail_prep <- prep(mail_rec)
+
+mail_df <- bake(mail_prep, new_data = NULL) %>%
+  select(-date) 
+#drop date column. still have recent_order as an identifier for articles
+
+#mail_df %>%
+ # slice(1:5)
+
+#convert to Document Term Matrix
+mail_dtm <- mail_df %>%
+  pivot_longer(cols = -c(recent_order),
+               names_to = "token",
+               values_to = "n") %>%
+  filter(n != 0) %>%
+  mutate(token = str_remove(string = token, pattern = "tf_combined_text_"),
+         recent_order = fct_drop(f = recent_order)) %>%
+  cast_dtm(document = recent_order, term = token, value = n)
+
+mail_lda4 <- LDA(mail_dtm, k = 4, control = list(seed = 123))
+
+top_terms_lda4 <- mail_lda4 %>%
+  tidy() %>%
+  group_by(topic) %>%
+  slice_max(n = 5, order_by = beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+top_terms_lda4 %>%
+  mutate(topic = factor(topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = topic)) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  scale_x_reordered() +
+  facet_wrap(~ topic, scales = "free", ncol = 2) +
+  coord_flip()
 
 ```
+
+best results thus far (though that isn't exactly hard). in this case, trying to do topic classification also gives idea of general content. 
+
 
 
 do something similar w/ Reddit jokes & see which words pop up most frequently, try to find the most common topics
 or also the correlated words -- think Hamilton? or Trump tweet examples
 
 
-
+think about filtering out articles w/ Piers Morgan?
+we get "fearless" from ppl praising Morgan (& implicitly supporting his derogatory comments towards Markle)
 
 
 
