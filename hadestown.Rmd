@@ -1,0 +1,104 @@
+---
+title: "HW09: Analyzing Hadestown"
+author: "Julia Du"
+date: "`r lubridate::today()`"
+output: 
+  github_document:
+    toc: true
+---
+
+## Load necessary libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+#library(geniusr)
+library(genius) #even easier than geniusr
+
+library(tidytext)
+library(reshape2)
+library(wordcloud)
+library(widyr)
+library(ggraph)
+library(igraph)
+
+library(textrecipes)
+library(topicmodels)
+
+library(viridis)
+library(ggtext)
+theme_set(theme_minimal())
+set.seed(123)
+
+```
+
+## get Hadestown lyrics
+
+used super easy package `genius` & didn't even have to use an API
+
+```{r}
+hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Original Broadway Cast Recording)")
+
+phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
+
+```
+
+## sentiment analysis
+
+```{r}
+string_hades <- hadestown %>%  
+  pull(track_title) %>%
+  str_remove(pattern = " by.*")
+
+hadestown_tidy <- hadestown %>%
+  bind_cols(string_hades) %>%
+  select(-track_title) %>%
+  rename(track_title = ...5) %>%
+  mutate(track_title = as_factor(track_title)) %>%
+# now tokenize
+  unnest_tokens(output = word, input = lyric)
+
+hadestown_afinn <- hadestown_tidy %>%
+  inner_join(get_sentiments(lexicon = "afinn")) %>%
+  mutate(cum_sent = cumsum(value), id = row_number())
+
+hadestown_afinn %>%
+  group_by(track_title) %>%
+  summarize(sent = mean(value)) %>%
+  ggplot(mapping = aes(x = fct_rev(track_title), y = sent, fill = sent)) +
+  geom_col() +
+  scale_fill_viridis_c() +
+  coord_flip() +
+  labs(
+    title = "Positive/negative sentiment in *Hadestown*",
+    subtitle = "By song",
+    x = NULL,
+    y = "Average sentiment",
+    fill = "Average\nsentiment",
+    caption = "Source: Genius"
+  ) +
+  theme(plot.title = element_markdown(),
+        legend.position = "none")
+```
+
+```{r}
+ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
+  geom_line() +
+  scale_x_reverse(breaks = hadestown_afinn %>%
+                    group_by(track_n) %>%
+                    filter(id == min(id)) %>%
+                    pull(id),
+                  labels = hadestown_afinn %>%
+                    group_by(track_n) %>%
+                    filter(id == min(id)) %>%
+                    pull(track_title)) +
+  labs(
+    title = "Positive/negative sentiment in *Hadestown*",
+    x = NULL,
+    y = "Cumulative sentiment",
+    caption = "Source: Genius"
+  ) +
+  # transpose to be able to fit song titles on the graph
+  coord_flip() +
+  theme(panel.grid.minor.y = element_blank(),
+        plot.title = element_markdown())
+```
