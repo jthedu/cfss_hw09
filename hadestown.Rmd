@@ -13,6 +13,7 @@ output:
 library(tidyverse)
 #library(geniusr)
 library(genius) #even easier than geniusr
+library(scales)
 
 library(tidytext)
 library(reshape2)
@@ -40,6 +41,7 @@ hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Origina
 
 phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
 
+lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
 ```
 
 ## sentiment analysis
@@ -142,6 +144,68 @@ hades_cors %>%
 
 
 ```
+
+## Comparing word frequencies
+
+https://www.tidytextmining.com/tidytext.html
+
+```{r}
+string_phan <- phantom %>%  
+  pull(track_title) %>%
+  str_remove(pattern = " by.*")
+
+phantom_tidy <- phantom %>%
+  bind_cols(string_phan) %>%
+  select(-track_title) %>%
+  rename(track_title = ...5) %>%
+  mutate(track_title = as_factor(track_title)) %>%
+# now tokenize
+  unnest_tokens(output = word, input = lyric) %>%
+  anti_join(stop_words)
+
+string_lesmis <- lesmis %>%
+  pull(track_title) %>%
+  str_remove(pattern = " by.*")
+
+lesmis_tidy <- lesmis %>%
+  bind_cols(string_lesmis) %>%
+  select(-track_title) %>%
+  rename(track_title = ...5) %>%
+  mutate(track_title = as_factor(track_title)) %>%
+# now tokenize
+  unnest_tokens(output = word, input = lyric) %>%
+  anti_join(stop_words)
+
+# compare words in Hadestown to Phantom of the Opera
+frequency <- bind_rows(mutate(hadestown_tidy, musical = "Hadestown"),
+                       mutate(phantom_tidy, musical = "Phantom of the Opera"),
+                       mutate(lesmis_tidy, musical = "Les Miserables")) %>% 
+  #mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(musical, word) %>%
+  group_by(musical) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>%
+  pivot_wider(names_from = musical, values_from = proportion) %>%
+  pivot_longer(c("Phantom of the Opera", "Les Miserables"), names_to = "musical", values_to = "proportion")
+
+
+# plot
+
+frequency %>%
+  ggplot(mapping = aes(x = proportion, y = `Hadestown`, 
+                       color = abs(`Hadestown` - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent) +
+  scale_y_log10(labels = percent) +
+  scale_color_gradient(limits = c(0, 0.001), 
+                       low = "darkolivegreen4", high = "gold3") +
+  facet_wrap(~ musical) +
+  theme(legend.position="none") +
+  labs(y = "Hadestown", x = NULL)
+```    
+
 
 
 ## Session info
