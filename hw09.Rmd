@@ -68,6 +68,10 @@ then can break the headline into tokens & look at sentiment. try and also find w
 then do same thing for preview
 
 ```{r}
+#try to join title & preview columns
+combined_mail <- tidy_mail %>%
+  unite(col = combined_text, title, preview, sep = ". ")
+
 # focusing on titles 
 titles_text <- tidy_mail %>%
   select(-preview) %>%
@@ -119,7 +123,9 @@ titles_text %>%
   
 ```
 
+merge title & preview columns?
 
+do pairwise correlation?
 
 ##
 ```{r}
