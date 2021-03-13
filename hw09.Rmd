@@ -73,22 +73,21 @@ combined_mail <- tidy_mail %>%
   unite(col = combined_text, title, preview, sep = ". ")
 
 # focusing on titles 
-titles_text <- tidy_mail %>%
-  select(-preview) %>%
-  unnest_tokens(output = word, input = title) %>%
+combined_word <- combined_mail %>%
+  unnest_tokens(output = word, input = combined_text) %>%
   anti_join(stop_words) 
 
 # word frequency
-titles_text %>%
+combined_word %>%
   count(word, sort = TRUE)
 # As expected, we can see Oprah's interview with Meghan Markle & Prince Harry dominate the headlines about Markle. Now I'm going to remove these names to try getting a better idea of the content
 
 common_words <- c("meghan", "harry", "markle", "meghan's", "harry's", "oprah", "interview")
 
-custom_title_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
+custom_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
 
 
-titles_text %>%
+combined_word %>%
   filter(!word %in% common_words) %>%
   count(word, sort = TRUE) %>%
   filter(n > 5)
@@ -99,23 +98,24 @@ titles_text %>%
 ## sentiment analysis of titles
 
 ```{r}
-bing_titles <- titles_text %>%
+bing_word <- combined_word %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) 
 
-bing_titles %>%
+bing_word %>%
   group_by(sentiment) %>%
-  top_n(5) %>%
+  slice_head(n = 5) %>%
+  ungroup() %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(n, word, fill = sentiment)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~sentiment, scales = "free_y") +
-  labs(title = "Analysis of Daily Mail titles",
+  labs(title = "Analysis of Daily Mail titles & previews",
        subtitle = "Of articles on Meghan Markle", 
        x = "Contribution to sentiment",
        y = NULL)
 
-titles_text %>%
+combined_word %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
