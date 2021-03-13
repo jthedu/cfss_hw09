@@ -17,11 +17,19 @@ library(reprex)
 library(tidyverse)
 library(lubridate)
 
-
 library(stringr)
 library(rvest)
 library(glue)
 
+library(tidytext)
+library(reshape2)
+library(wordcloud)
+library(widyr)
+library(ggraph)
+library(igraph)
+
+library(textrecipes)
+library(topicmodels)
 ```
 
-The 3rd chunk is needed to scrape a website in hw08_p2.Rmd. The 4th chunk is needed to use an API in hw08-p2-API.Rmd.
+The 2nd chunk is needed to scrape a website, the 3rd to do basic sentiment analysis and pairwise correlation, the 4th to generate potential topics through Latent Dirichlet allocation.

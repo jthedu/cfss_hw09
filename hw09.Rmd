@@ -1,5 +1,5 @@
 ---
-title: "HW09: Analyzing sentiment of Daily Mail coverage on Meghan Markle"
+title: "HW09: Analyzing Daily Mail coverage on Meghan Markle"
 author: "Julia Du"
 date: "`r lubridate::today()`"
 output: 
@@ -70,7 +70,7 @@ tidy_mail <- almost_mail %>%
 
 ```
 
-##
+## Looking at word frequency 
 
 then can break the headline into tokens & look at sentiment. try and also find words correlated w/ Meghan Markle
 then do same thing for preview
@@ -90,7 +90,8 @@ combined_word %>%
   count(word, sort = TRUE)
 # As expected, we can see Oprah's interview with Meghan Markle & Prince Harry dominate the headlines about Markle. Now I'm going to remove these names to try getting a better idea of the content
 
-common_words <- c("meghan", "harry", "markle", "meghan's", "harry's", "oprah", "interview")
+common_words <- c("meghan's", "harry's", "winfrey", "interview", "markle")
+#original list of common words: c("meghan", "markle", "meghan's", "harry's", "oprah", "interview")
 
 custom_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
 
@@ -103,7 +104,7 @@ combined_word %>%
 # still not very informative
 ```
 
-## sentiment analysis
+## Sentiment analysis
 
 ```{r}
 bing_word <- combined_word %>%
@@ -137,7 +138,8 @@ drawn heavily from: https://www.tidytextmining.com/ngrams.html#visualizing-bigra
 
 do pairwise correlation?
 
-##
+## Pairwise correlation
+
 ```{r}
 word_cors <- combined_word %>%
   group_by(word) %>%
@@ -169,12 +171,11 @@ word_cors %>%
 
 not helpful. we're very limited in what we can do w/ just the title & 1st sent of an article, just not enough data to draw meaningful conclusions
 
-# topic modeling
+## Topic modeling (Latent Dirichlet allocation)
+
 https://cfss.uchicago.edu/notes/topic-modeling/
 
 ```{r}
-tidy_mail
-
 custom_stop_vec <- custom_stop %>%
   pull(word)
 
@@ -185,9 +186,9 @@ mail_rec <- recipe(~., data = tidy_mail) %>%
   step_tokenmerge(title, preview, prefix = "combined_text") %>%
   step_stopwords(combined_text, custom_stopword_source = custom_stop_vec) %>%
 # PROBLEM - CAN'T GET STOPWORD_SOURCE TO RECOGNIZE BOTH custom & regular stopwords
-  
-  
-  step_ngram(combined_text, num_tokens = 3, min_num_tokens = 1) %>%
+  # can do this: custom_stopword_source = custom_stop_vec
+
+  step_ngram(combined_text, num_tokens = 1, min_num_tokens = 1) %>%
   step_tokenfilter(combined_text, max_tokens = 2500) %>%
   step_tf(combined_text)
 
@@ -210,7 +211,7 @@ mail_dtm <- mail_df %>%
          recent_order = fct_drop(f = recent_order)) %>%
   cast_dtm(document = recent_order, term = token, value = n)
 
-mail_lda4 <- LDA(mail_dtm, k = 4, control = list(seed = 123))
+mail_lda4 <- LDA(mail_dtm, k = 6, control = list(seed = 123))
 
 top_terms_lda4 <- mail_lda4 %>%
   tidy() %>%
@@ -225,7 +226,7 @@ top_terms_lda4 %>%
   ggplot(aes(term, beta, fill = topic)) +
   geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
   scale_x_reordered() +
-  facet_wrap(~ topic, scales = "free", ncol = 2) +
+  facet_wrap(~ topic, scales = "free", ncol = 3) +
   coord_flip()
 
 ```
@@ -233,10 +234,7 @@ top_terms_lda4 %>%
 best results thus far (though that isn't exactly hard). in this case, trying to do topic classification also gives idea of general content. 
 
 
-
-do something similar w/ Reddit jokes & see which words pop up most frequently, try to find the most common topics
-or also the correlated words -- think Hamilton? or Trump tweet examples
-
+QUESTION - WHAT SHOULD I FILTER OUT BEFORE (I.E. MAKE STOPWORDS) & what should i keep?
 
 think about filtering out articles w/ Piers Morgan?
 we get "fearless" from ppl praising Morgan (& implicitly supporting his derogatory comments towards Markle)
@@ -247,6 +245,8 @@ we get "fearless" from ppl praising Morgan (& implicitly supporting his derogato
 
 
 
+do something similar w/ Reddit jokes & see which words pop up most frequently, try to find the most common topics
+or also the correlated words -- think Hamilton? or Trump tweet examples
 
 
 ```{r}
