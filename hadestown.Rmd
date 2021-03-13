@@ -55,7 +55,8 @@ hadestown_tidy <- hadestown %>%
   rename(track_title = ...5) %>%
   mutate(track_title = as_factor(track_title)) %>%
 # now tokenize
-  unnest_tokens(output = word, input = lyric)
+  unnest_tokens(output = word, input = lyric) %>%
+  anti_join(stop_words)
 
 hadestown_afinn <- hadestown_tidy %>%
   inner_join(get_sentiments(lexicon = "afinn")) %>%
@@ -80,6 +81,8 @@ hadestown_afinn %>%
         legend.position = "none")
 ```
 
+## adjust figure size!
+
 ```{r}
 ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   geom_line() +
@@ -101,4 +104,48 @@ ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   coord_flip() +
   theme(panel.grid.minor.y = element_blank(),
         plot.title = element_markdown())
+```
+
+```{r}
+custom_hades <- c("la", "gonna")
+
+custom_hades_stop <- bind_rows(tibble(word = custom_hades, lexicon = c("custom")), stop_words)
+
+
+hades_cors <- hadestown_tidy %>%
+  anti_join(custom_hades_stop) %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(item = word, feature = track_n, sort = TRUE)
+# looking at the common pairs of words co-appearing w/in each article (as defined by recent_order)
+
+hades_cors %>%
+  filter(item1 %in% c("hell", "love", "song", "livin", "gotta", "wait")) %>%
+  group_by(item1) %>%
+  slice_head(n = 5) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(mapping = aes(x = item2, y = correlation)) +
+  geom_col() +
+  facet_wrap(~ item1, scales = "free") +
+  coord_flip()
+
+hades_cors %>%
+  filter(correlation > .35) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "orangered3", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  ggtitle("Word pairs with at least a correlation of .35 appearing in the same song")
+  theme_void()
+
+
+```
+
+
+## Session info
+
+```{r, echo = TRUE}
+devtools::session_info()
 ```
