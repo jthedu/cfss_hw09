@@ -49,10 +49,6 @@ lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album =
 The following draws heavily from the example found [here](https://cfss.uchicago.edu/notes/hamilton/#pairs-of-words).
 
 ```{r}
-string_hades <- hadestown %>%  
-  pull(track_title) %>%
-  str_remove(pattern = " by.*")
-
 tidy_musical <- function(musical_df){
   # keep only song names w/o "by..." info
   clean_track_title <- musical_df %>%
@@ -69,16 +65,7 @@ tidy_musical <- function(musical_df){
   anti_join(stop_words)
 }
 
-tidy_hades <- tidy_musical(hadestown)
-
-hadestown_tidy <- hadestown %>%
-  bind_cols(string_hades) %>%
-  select(-track_title) %>%
-  rename(track_title = ...5) %>%
-  mutate(track_title = as_factor(track_title)) %>%
-# now tokenize
-  unnest_tokens(output = word, input = lyric) %>%
-  anti_join(stop_words)
+hadestown_tidy <- tidy_musical(hadestown)
 
 hadestown_afinn <- hadestown_tidy %>%
   inner_join(get_sentiments(lexicon = "afinn")) %>%
@@ -105,7 +92,7 @@ hadestown_afinn %>%
 
 ## adjust figure size!
 
-```{r, fig.height = 10}
+```{r, fig.height = 8}
 ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   geom_line() +
   scale_x_reverse(breaks = hadestown_afinn %>%
@@ -124,10 +111,11 @@ ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   ) +
   coord_flip() +
   theme(panel.grid.minor.y = element_blank(),
-        plot.title = element_markdown())
+        plot.title = element_markdown(), text = element_text(size = 8))
 ```
 
 We see some 
+titles are a bit crammed because some songs are very long & others are very short. 
 
 ## Correlated words
 
@@ -168,7 +156,7 @@ hades_cors %>%
   ggtitle("Word pairs with at least a correlation of .35 appearing in the same song")
 ```
 
-## Comparing word frequencies
+## Comparing word frequencies across musicals
 
 https://www.tidytextmining.com/tidytext.html
 
@@ -188,43 +176,12 @@ phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of 
 
 lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
 
-string_hades <- hadestown %>%  
-  pull(track_title) %>%
-  str_remove(pattern = " by.*")
-
-hadestown_tidy <- hadestown %>%
-  bind_cols(string_hades) %>%
-  select(-track_title) %>%
-  rename(track_title = ...5) %>%
-  mutate(track_title = as_factor(track_title)) %>%
-# now tokenize
-  unnest_tokens(output = word, input = lyric) %>%
-  anti_join(stop_words)
+hadestown_tidy <- tidy_musical(hadestown)
 
 # above is for reprex purposes
-string_phan <- phantom %>%  
-  pull(track_title) %>%
-  str_remove(pattern = " by.*")
+phantom_tidy <- tidy_musical(phantom)
 
-phantom_tidy <- phantom %>%
-  bind_cols(string_phan) %>%
-  select(-track_title) %>%
-  rename(track_title = ...5) %>%
-  mutate(track_title = as_factor(track_title)) %>%
-  unnest_tokens(output = word, input = lyric) %>%
-  anti_join(stop_words)
-
-string_lesmis <- lesmis %>%
-  pull(track_title) %>%
-  str_remove(pattern = " by.*")
-
-lesmis_tidy <- lesmis %>%
-  bind_cols(string_lesmis) %>%
-  select(-track_title) %>%
-  rename(track_title = ...5) %>%
-  mutate(track_title = as_factor(track_title)) %>%
-  unnest_tokens(output = word, input = lyric) %>%
-  anti_join(stop_words)
+lesmis_tidy <- tidy_musical(lesmis)
 
 # compare words in Hadestown to Phantom of the Opera & Les Mis
 frequency <- bind_rows(mutate(hadestown_tidy, musical = "Hadestown"),
@@ -237,7 +194,6 @@ frequency <- bind_rows(mutate(hadestown_tidy, musical = "Hadestown"),
   pivot_wider(names_from = musical, values_from = proportion) %>%
   pivot_longer(c("Phantom of the Opera", "Les Miserables"), 
                names_to = "musical", values_to = "proportion")
-
 
 # plot
 frequency %>%

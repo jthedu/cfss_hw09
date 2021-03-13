@@ -34,40 +34,22 @@ set.seed(123)
 
 https://discuss.analyticsvidhya.com/t/how-to-remove-value-from-a-vector-in-r/2975/3
 
-## Scraping & cleaning data
+## Getting & cleaning data
+
+You'll need to first run the [data_hw09.R](data_hw09.R) script to scrape data from the *Daily Mail* website.
+I created this scraping script outside of my hw09.Rmd file because the Daily Mail updates frequently, and I don't want to knit my .Rmd & end up running the scraping code (& thereby getting a totally different list of articles). 
 
 ```{r mail}
-# create folder to store local copies of df
-dir.create("./data")
-
-#mail <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html")
-
-mail_nodes <- html_nodes(mail, ".sport span , #content p, .linkro-ccow, .linkro-darkred a")
-# use "p , .linkro-darkred a" to get w/o date
-
-mail_vec <- mail_nodes %>%
-  html_text()
-
-mail_vec <- 
-  mail_vec[c(-1, -400)] %>%
-  append(c("", ""), after = 2) #adding spaces so that each article is divided into 5 elements
-
-almost_mail <- mail_vec %>%
-  split(ceiling(seq_along(mail_vec)/5)) %>%
-  as_tibble() 
-
-# stores local copy of dataframe
-almost_mail %>%
-  write_csv("./data/mail_210310.6pm.csv")
+# read in local copy of scraped data
+almost_mail <- read_csv("./data/mail_210310.6pm.csv")
 
 tidy_mail <- almost_mail %>%
-  filter(!(. =="")) %>% # removing blank rows from all article columns
-  # could use transpose here instead of pivot commands below (just t() & then as_tibble() in pipe)
+  filter(!(. =="")) %>% # removing blank rows from all article columns - based on original scraped df
+# when using a df that was read-in as a csv, could just do "drop_na()" instead of filter
   mutate(id = c("title", "date", "preview"), .before = 1) %>%
-#  mutate(row = row_number()) %>%
+# could use transpose here instead of pivot commands below (just t() & then as_tibble() in pipe)
   pivot_longer(-id, names_to = "recent_order", values_to = "values") %>%
   pivot_wider(names_from = id, values_from = values)
-
 ```
 
 After starting my text analysis, it became clear that the 
@@ -78,12 +60,9 @@ then can break the headline into tokens & look at sentiment. try and also find w
 then do same thing for preview
 
 ```{r}
-#try to join title & preview columns
-combined_mail <- tidy_mail %>%
-  unite(col = combined_text, title, preview, sep = ". ")
-
-# focusing on titles 
-combined_word <- combined_mail %>%
+combined_word <- tidy_mail %>%
+  unite(col = combined_text, title, preview, sep = ". ") %>% 
+  #join title & preview columns 
   unnest_tokens(output = word, input = combined_text) %>%
   anti_join(stop_words) 
 
@@ -179,39 +158,16 @@ not helpful. we're very limited in what we can do w/ just the title & 1st sent o
 https://cfss.uchicago.edu/notes/topic-modeling/
 
 ```{r}
-custom_stop_vec <- custom_stop %>%
-  pull(word)
-
-mail_rec <- recipe(~., data = tidy_mail) %>%
-  # even though already pre-processed data into combined_mail, 
-  #redo tokenize/stopwords steps for tidy_mail so that R recognizes tokenized columns as tokenized
-  step_tokenize(title, preview) %>%
-  step_tokenmerge(title, preview, prefix = "combined_text") %>%
-  step_stopwords(combined_text, custom_stopword_source = custom_stop_vec) %>%
-# PROBLEM - CAN'T GET STOPWORD_SOURCE TO RECOGNIZE BOTH custom & regular stopwords
-  # can do this: custom_stopword_source = custom_stop_vec
-
-  step_ngram(combined_text, num_tokens = 1, min_num_tokens = 1) %>%
-  step_tokenfilter(combined_text, max_tokens = 2500) %>%
-  step_tf(combined_text)
-
-test <- recipe(~., data = combined_word) %>%
+mail_rec <- recipe(~., data = combined_word) %>%
   step_tokenize(word) %>% # THIS TELLS R THIS IS A TOKEN LIST
-  step_ngram(word, num_tokens = 2, min_num_tokens = 1) %>%
-  step_tokenfilter(word, max_tokens = 2500) %>%
+  step_ngram(word, num_tokens = 1, min_num_tokens = 1) %>%
+  step_tokenfilter(word, max_tokens = 1500) %>%
   step_tf(word)
-
-test_prep <- prep(test, verbose = TRUE)
-
 
 mail_prep <- prep(mail_rec, verbose = TRUE)
 
 mail_df <- bake(mail_prep, new_data = NULL) %>%
   select(-date) 
-#drop date column. still have recent_order as an identifier for articles
-
-#mail_df %>%
- # slice(1:5)
 
 #convert to Document Term Matrix
 mail_dtm <- mail_df %>%
@@ -219,7 +175,7 @@ mail_dtm <- mail_df %>%
                names_to = "token",
                values_to = "n") %>%
   filter(n != 0) %>%
-  mutate(token = str_remove(string = token, pattern = "tf_combined_text_"),
+  mutate(token = str_remove(string = token, pattern = "tf_word_"),
          recent_order = fct_drop(f = recent_order)) %>%
   cast_dtm(document = recent_order, term = token, value = n)
 
@@ -228,7 +184,8 @@ mail_lda4 <- LDA(mail_dtm, k = 6, control = list(seed = 123))
 top_terms_lda4 <- mail_lda4 %>%
   tidy() %>%
   group_by(topic) %>%
-  slice_max(n = 5, order_by = beta, with_ties = FALSE) %>% #not returning all ties
+  slice_max(n = 5, order_by = beta, with_ties = FALSE) %>% 
+  # so it doesn't return all ties
   ungroup() %>%
   arrange(topic, -beta)
 
@@ -240,7 +197,7 @@ top_terms_lda4 %>%
   scale_x_reordered() +
   facet_wrap(~ topic, scales = "free", ncol = 3) +
   coord_flip() +
-  theme(text = element_text(size = 5))
+  theme(text = element_text(size = 8))
 
 ```
 
