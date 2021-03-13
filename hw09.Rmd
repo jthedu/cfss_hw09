@@ -70,6 +70,8 @@ tidy_mail <- almost_mail %>%
 
 ```
 
+After starting my text analysis, it became clear that the 
+
 ## Looking at word frequency 
 
 then can break the headline into tokens & look at sentiment. try and also find words correlated w/ Meghan Markle
@@ -106,6 +108,8 @@ combined_word %>%
 
 ## Sentiment analysis
 
+ https://www.tidytextmining.com/sentiment.html 
+
 ```{r}
 bing_word <- combined_word %>%
   inner_join(get_sentiments("bing")) %>%
@@ -134,11 +138,10 @@ combined_word %>%
   
 ```
 
-drawn heavily from: https://www.tidytextmining.com/ngrams.html#visualizing-bigrams-in-other-texts
-
-do pairwise correlation?
-
 ## Pairwise correlation
+
+drawn heavily from: https://www.tidytextmining.com/ngrams.html
+
 
 ```{r}
 word_cors <- combined_word %>%
@@ -192,7 +195,16 @@ mail_rec <- recipe(~., data = tidy_mail) %>%
   step_tokenfilter(combined_text, max_tokens = 2500) %>%
   step_tf(combined_text)
 
-mail_prep <- prep(mail_rec)
+test <- recipe(~., data = combined_word) %>%
+  step_tokenize(word) %>% # THIS TELLS R THIS IS A TOKEN LIST
+  step_ngram(word, num_tokens = 2, min_num_tokens = 1) %>%
+  step_tokenfilter(word, max_tokens = 2500) %>%
+  step_tf(word)
+
+test_prep <- prep(test, verbose = TRUE)
+
+
+mail_prep <- prep(mail_rec, verbose = TRUE)
 
 mail_df <- bake(mail_prep, new_data = NULL) %>%
   select(-date) 
@@ -216,7 +228,7 @@ mail_lda4 <- LDA(mail_dtm, k = 6, control = list(seed = 123))
 top_terms_lda4 <- mail_lda4 %>%
   tidy() %>%
   group_by(topic) %>%
-  slice_max(n = 5, order_by = beta) %>%
+  slice_max(n = 5, order_by = beta, with_ties = FALSE) %>% #not returning all ties
   ungroup() %>%
   arrange(topic, -beta)
 
@@ -227,7 +239,8 @@ top_terms_lda4 %>%
   geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
   scale_x_reordered() +
   facet_wrap(~ topic, scales = "free", ncol = 3) +
-  coord_flip()
+  coord_flip() +
+  theme(text = element_text(size = 5))
 
 ```
 
