@@ -7,6 +7,10 @@ output:
     toc: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
 ## Load necessary libraries
 
 ```{r, message = FALSE}
@@ -16,27 +20,23 @@ library(genius) #even easier than geniusr
 library(scales)
 
 library(tidytext)
-library(reshape2)
-library(wordcloud)
 library(widyr)
 library(ggraph)
 library(igraph)
-
-library(textrecipes)
-library(topicmodels)
 
 library(viridis)
 library(ggtext)
 theme_set(theme_minimal())
 set.seed(123)
-
 ```
 
-## get Hadestown lyrics
+## Get lyric data
 
-used super easy package `genius` & didn't even have to use an API
+I'm focusing on the musical *Hadestown* for most of my analysis, but I bring in *Les Miserables* and *Phantom of the Opera* at the end to look at common words between those 2 musicals and *Hadestown*.
 
-```{r}
+I got the data From [Genius.com](https://genius.com) by using a very helpful package called `genius` (documentation [here](https://github.com/JosiahParry/genius)), so I didn't even have to get an API authentication token like with the `geniusr` package.
+
+```{r, cache = TRUE}
 hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Original Broadway Cast Recording)")
 
 phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
@@ -44,12 +44,32 @@ phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of 
 lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
 ```
 
-## sentiment analysis
+## Sentiment analysis
+
+The following draws heavily from the example found [here](https://cfss.uchicago.edu/notes/hamilton/#pairs-of-words).
 
 ```{r}
 string_hades <- hadestown %>%  
   pull(track_title) %>%
   str_remove(pattern = " by.*")
+
+tidy_musical <- function(musical_df){
+  # keep only song names w/o "by..." info
+  clean_track_title <- musical_df %>%
+    pull(track_title) %>%
+  str_remove(pattern = " by.*")
+  
+  musical_df %>%
+  bind_cols(clean_track_title) %>%
+  select(-track_title) %>%
+  rename(track_title = ...5) %>%
+  mutate(track_title = as_factor(track_title)) %>%
+# now tokenize
+  unnest_tokens(output = word, input = lyric) %>%
+  anti_join(stop_words)
+}
+
+tidy_hades <- tidy_musical(hadestown)
 
 hadestown_tidy <- hadestown %>%
   bind_cols(string_hades) %>%
@@ -85,7 +105,7 @@ hadestown_afinn %>%
 
 ## adjust figure size!
 
-```{r}
+```{r, fig.height = 10}
 ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   geom_line() +
   scale_x_reverse(breaks = hadestown_afinn %>%
@@ -102,11 +122,17 @@ ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
     y = "Cumulative sentiment",
     caption = "Source: Genius"
   ) +
-  # transpose to be able to fit song titles on the graph
   coord_flip() +
   theme(panel.grid.minor.y = element_blank(),
         plot.title = element_markdown())
 ```
+
+We see some 
+
+## Correlated words
+
+same source as Markle file: https://www.tidytextmining.com/ngrams.html
+
 
 ```{r}
 custom_hades <- c("la", "gonna")
@@ -140,9 +166,6 @@ hades_cors %>%
   geom_node_point(color = "orangered3", size = 5) +
   geom_node_text(aes(label = name), repel = TRUE) +
   ggtitle("Word pairs with at least a correlation of .35 appearing in the same song")
-  theme_void()
-
-
 ```
 
 ## Comparing word frequencies
@@ -150,6 +173,35 @@ hades_cors %>%
 https://www.tidytextmining.com/tidytext.html
 
 ```{r}
+library(tidyverse)
+#library(geniusr)
+library(genius) #even easier than geniusr
+library(scales)
+library(tidytext)
+
+theme_set(theme_minimal())
+
+
+hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Original Broadway Cast Recording)")
+
+phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
+
+lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
+
+string_hades <- hadestown %>%  
+  pull(track_title) %>%
+  str_remove(pattern = " by.*")
+
+hadestown_tidy <- hadestown %>%
+  bind_cols(string_hades) %>%
+  select(-track_title) %>%
+  rename(track_title = ...5) %>%
+  mutate(track_title = as_factor(track_title)) %>%
+# now tokenize
+  unnest_tokens(output = word, input = lyric) %>%
+  anti_join(stop_words)
+
+# above is for reprex purposes
 string_phan <- phantom %>%  
   pull(track_title) %>%
   str_remove(pattern = " by.*")
@@ -159,7 +211,6 @@ phantom_tidy <- phantom %>%
   select(-track_title) %>%
   rename(track_title = ...5) %>%
   mutate(track_title = as_factor(track_title)) %>%
-# now tokenize
   unnest_tokens(output = word, input = lyric) %>%
   anti_join(stop_words)
 
@@ -172,25 +223,23 @@ lesmis_tidy <- lesmis %>%
   select(-track_title) %>%
   rename(track_title = ...5) %>%
   mutate(track_title = as_factor(track_title)) %>%
-# now tokenize
   unnest_tokens(output = word, input = lyric) %>%
   anti_join(stop_words)
 
-# compare words in Hadestown to Phantom of the Opera
+# compare words in Hadestown to Phantom of the Opera & Les Mis
 frequency <- bind_rows(mutate(hadestown_tidy, musical = "Hadestown"),
                        mutate(phantom_tidy, musical = "Phantom of the Opera"),
                        mutate(lesmis_tidy, musical = "Les Miserables")) %>% 
-  #mutate(word = str_extract(word, "[a-z']+")) %>%
   count(musical, word) %>%
   group_by(musical) %>%
   mutate(proportion = n / sum(n)) %>% 
   select(-n) %>%
   pivot_wider(names_from = musical, values_from = proportion) %>%
-  pivot_longer(c("Phantom of the Opera", "Les Miserables"), names_to = "musical", values_to = "proportion")
+  pivot_longer(c("Phantom of the Opera", "Les Miserables"), 
+               names_to = "musical", values_to = "proportion")
 
 
 # plot
-
 frequency %>%
   ggplot(mapping = aes(x = proportion, y = `Hadestown`, 
                        color = abs(`Hadestown` - proportion))) +
@@ -200,13 +249,14 @@ frequency %>%
   scale_x_log10(labels = percent) +
   scale_y_log10(labels = percent) +
   scale_color_gradient(limits = c(0, 0.001), 
-                       low = "darkolivegreen4", high = "gold3") +
+                       low = "darkolivegreen4", high = "firebrick") +
+  #QUESTION IS HERE!!!
   facet_wrap(~ musical) +
   theme(legend.position="none") +
   labs(y = "Hadestown", x = NULL)
 ```    
 
-
+"Words that are close to the line in these plots have similar frequencies in both sets of texts, for example, in both Austen and Brontë texts (“miss”, “time”, “day” at the upper frequency end) or in both Austen and Wells texts (“time”, “day”, “brother” at the high frequency end). Words that are far from the line are words that are found more in one set of texts than another. For example, in the Austen-Brontë panel, words like “elizabeth”, “emma”, and “fanny” (all proper nouns) are found in Austen’s texts but not much in the Brontë texts, while words like “arthur” and “dog” are found in the Brontë texts but not the Austen texts. In comparing H.G. Wells with Jane Austen, Wells uses words like “beast”, “guns”, “feet”, and “black” that Austen does not, while Austen uses words like “family”, “friend”, “letter”, and “dear” that Wells does not."
 
 ## Session info
 
