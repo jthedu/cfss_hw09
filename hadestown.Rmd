@@ -1,5 +1,5 @@
 ---
-title: "HW09: Analyzing Hadestown"
+title: "HW09: Analyzing Hadestown lyrics"
 author: "Julia Du"
 date: "`r lubridate::today()`"
 output: 
@@ -15,7 +15,6 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 ```{r, message = FALSE}
 library(tidyverse)
-#library(geniusr)
 library(genius) #even easier than geniusr
 library(scales)
 
@@ -30,23 +29,29 @@ theme_set(theme_minimal())
 set.seed(123)
 ```
 
+## Overview
+
+I'm focusing on the lyrics of the musical *Hadestown* for most of my analysis, but I bring in *Les Miserables* and *Phantom of the Opera* at the end to look at common words between those 2 musicals and *Hadestown*.
+
+I got the data from [Genius.com](https://genius.com) by using a very helpful package called `genius` (documentation [here](https://github.com/JosiahParry/genius)), so I didn't even have to get an API authentication token like with the `geniusr` package.
+
+My analysis draws heavily from examples in [*Text Mining with R*](https://www.tidytextmining.com/tidytext.html) and our [class notes](https://cfss.uchicago.edu/notes/hamilton/#pairs-of-words).
+
+
 ## Get lyric data
 
-I'm focusing on the musical *Hadestown* for most of my analysis, but I bring in *Les Miserables* and *Phantom of the Opera* at the end to look at common words between those 2 musicals and *Hadestown*.
-
-I got the data From [Genius.com](https://genius.com) by using a very helpful package called `genius` (documentation [here](https://github.com/JosiahParry/genius)), so I didn't even have to get an API authentication token like with the `geniusr` package.
-
 ```{r, cache = TRUE}
-hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Original Broadway Cast Recording)")
+hadestown <- genius_album(artist = "Anais Mitchell", 
+                          album = "Hadestown (Original Broadway Cast Recording)")
 
-phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
+phantom <- genius_album(artist = "Andrew Lloyd Webber", 
+                        album = "The Phantom of the Opera (Original London Cast Recording)")
 
-lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
+lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", 
+                       album = "Les Miserables (1987 Original Broadway Cast)")
 ```
 
 ## Sentiment analysis
-
-The following draws heavily from the example found [here](https://cfss.uchicago.edu/notes/hamilton/#pairs-of-words).
 
 ```{r}
 tidy_musical <- function(musical_df){
@@ -90,9 +95,9 @@ hadestown_afinn %>%
         legend.position = "none")
 ```
 
-## adjust figure size!
+There are some significant highs and lows in this musical. Unsurprisingly, "Word to the Wise", a threatening song for our protagonists, is the most negative song alongside the tellingly-named "Nothing Changes" and "Gone, I'm Gone." "Epic I" is correctly identified as a very positive song, as protagonist Orpheus speaks about how he can bring back spring, but this analysis is not perfect. "Wait for Me("Hey, the big artiste...") [Intro]" is not a particularly happy song, but it is very short, so it probably was mis-identified as very positive.
 
-```{r, fig.height = 8}
+```{r, fig.height = 7}
 ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
   geom_line() +
   scale_x_reverse(breaks = hadestown_afinn %>%
@@ -104,18 +109,20 @@ ggplot(data = hadestown_afinn, mapping = aes(x = id, y = cum_sent)) +
                     filter(id == min(id)) %>%
                     pull(track_title)) +
   labs(
-    title = "Positive/negative sentiment in *Hadestown*",
+    title = "Cumulative positive/negative sentiment in *Hadestown*",
     x = NULL,
     y = "Cumulative sentiment",
     caption = "Source: Genius"
   ) +
   coord_flip() +
   theme(panel.grid.minor.y = element_blank(),
-        plot.title = element_markdown(), text = element_text(size = 8))
+        plot.title = element_markdown(), text = element_text(size = 6))
 ```
 
-We see some 
-titles are a bit crammed because some songs are very long & others are very short. 
+Note: the song titles are a bit crammed because some songs are very long and others are very short (& thus the # of words that'll contribute to a song's sentiment score vary across songs). 
+
+This cumulative sentiment figure builds upon what we saw above. There are some real low points around "Nothing Changes" (the Fates warn Orpheus his attempt to save Eurydice is pointless) and highs around "All I've Ever Known" (early in the musical, when Eurydice realizes she's fallen in love with Orpheus) and "Wait for Me("If you wanna walk out of hell...)[Intro]" (when it looks like Orpheus will be able to bring Eurydice out of Hadestown).  
+As can be expected from a musical about Hades, the overall sentiment is quite negative. By the end of the play, the cumulative sentiment is still quite negative because Orpheus ultimately fails to save Eurydice.   
 
 ## Correlated words
 
@@ -127,25 +134,29 @@ custom_hades <- c("la", "gonna")
 
 custom_hades_stop <- bind_rows(tibble(word = custom_hades, lexicon = c("custom")), stop_words)
 
-
+# correlated words
 hades_cors <- hadestown_tidy %>%
   anti_join(custom_hades_stop) %>%
   group_by(word) %>%
   filter(n() >= 20) %>%
   pairwise_cor(item = word, feature = track_n, sort = TRUE)
-# looking at the common pairs of words co-appearing w/in each article (as defined by recent_order)
+# looking at the common pairs of words co-appearing w/in each song
 
 hades_cors %>%
   filter(item1 %in% c("hell", "love", "song", "livin", "gotta", "wait")) %>%
   group_by(item1) %>%
+  mutate(item2 = as_factor(item2), item2 = fct_reorder(item2, correlation)) %>%
   slice_head(n = 5) %>%
   ungroup() %>%
-  mutate(item2 = reorder(item2, correlation)) %>%
-  ggplot(mapping = aes(x = item2, y = correlation)) +
+  ggplot(mapping = aes(x = item2, y = correlation, fill = item1)) +
   geom_col() +
   facet_wrap(~ item1, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  labs(title = "Correlated terms with selected words in Hadestown", 
+       y = "Correlation", x = "", caption = "Source: Genius") +
+  theme(legend.position = "none")
 
+# word cluster
 hades_cors %>%
   filter(correlation > .35) %>%
   graph_from_data_frame() %>%
@@ -153,32 +164,16 @@ hades_cors %>%
   geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
   geom_node_point(color = "orangered3", size = 5) +
   geom_node_text(aes(label = name), repel = TRUE) +
-  ggtitle("Word pairs with at least a correlation of .35 appearing in the same song")
+  ggtitle("Word pairs with at least a correlation of .35 appearing in the same Hadestown song")
 ```
+
+The bar graph highlights some common motifs: you gotta keep your head low, hell is Hadestown, wait for me because I'm coming. It also highlights central questions in the musical: is life hell, is love king or the most important?
+
+The word cluster tells similar motifs: "brother, wait for me, I'm coming", "gotta keep your head low in Hadestown", etc. One cluster seems to be from characters describing Orpheus: a boy in true love, singing to change the world. Hades the character is also expectedly correlated with "king". 
 
 ## Comparing word frequencies across musicals
 
-https://www.tidytextmining.com/tidytext.html
-
 ```{r}
-library(tidyverse)
-#library(geniusr)
-library(genius) #even easier than geniusr
-library(scales)
-library(tidytext)
-
-theme_set(theme_minimal())
-
-
-hadestown <- genius_album(artist = "Anais Mitchell", album = "Hadestown (Original Broadway Cast Recording)")
-
-phantom <- genius_album(artist = "Andrew Lloyd Webber", album = "The Phantom of the Opera (Original London Cast Recording)")
-
-lesmis <- genius_album(artist = "Les Miserables Original Broadway Cast", album = "Les Miserables (1987 Original Broadway Cast)")
-
-hadestown_tidy <- tidy_musical(hadestown)
-
-# above is for reprex purposes
 phantom_tidy <- tidy_musical(phantom)
 
 lesmis_tidy <- tidy_musical(lesmis)
@@ -205,14 +200,20 @@ frequency %>%
   scale_x_log10(labels = percent) +
   scale_y_log10(labels = percent) +
   scale_color_gradient(limits = c(0, 0.001), 
-                       low = "darkolivegreen4", high = "firebrick") +
-  #QUESTION IS HERE!!!
+                       low = "darkolivegreen4", high = "darkgoldenrod3") +
+  # color highlights words that have similar frequencies across musicals 
   facet_wrap(~ musical) +
   theme(legend.position="none") +
-  labs(y = "Hadestown", x = NULL)
+  labs(title = "Frequencies of words across musicals",
+       y = "Hadestown", x = NULL, caption = "Source: Genius")
 ```    
 
-"Words that are close to the line in these plots have similar frequencies in both sets of texts, for example, in both Austen and Brontë texts (“miss”, “time”, “day” at the upper frequency end) or in both Austen and Wells texts (“time”, “day”, “brother” at the high frequency end). Words that are far from the line are words that are found more in one set of texts than another. For example, in the Austen-Brontë panel, words like “elizabeth”, “emma”, and “fanny” (all proper nouns) are found in Austen’s texts but not much in the Brontë texts, while words like “arthur” and “dog” are found in the Brontë texts but not the Austen texts. In comparing H.G. Wells with Jane Austen, Wells uses words like “beast”, “guns”, “feet”, and “black” that Austen does not, while Austen uses words like “family”, “friend”, “letter”, and “dear” that Wells does not."
+Words close to the diagonal line in the above plots have similar frequencies in both sets of musicals. If a word is colored, it has a more similar frequency (across the 2 musicals being compared) than any of the black words. Gold-colored words have the most similar frequencies, while green-colored words have slightly less similar frequencies. 
+
+For Hadestown & Les Mis, terms that have very similar frequencies are "abandon" and "buy", while "begin" and "meet" are words with slightly less similar frequencies - though all of these words have more similar frequencies than words like "god" (very popular in Les Mis but not in Hadestown) or "wall" (popular in Hadestown but not Les Mis).
+
+For Hadestown & Phantom, "bad" and "lead" are used at very similar frequencies, while "arms" and "fall" have slightly less similar frequencies across the 2 musicals. "Music" is used much more in Phantom than in Hadestown, while "la" is used much more in Hadestown.
+
 
 ## Session info
 
