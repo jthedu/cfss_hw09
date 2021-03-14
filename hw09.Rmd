@@ -7,6 +7,11 @@ output:
     toc: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+
 ## Load necessary libraries
 
 ```{r, message = FALSE}
@@ -15,7 +20,7 @@ library(stringr)
 library(glue)
 
 library(tidytext)
-#library(tokenizers)
+#library(tokenizers) # not used this time around
 library(SnowballC)
 library(reshape2)
 library(wordcloud)
@@ -33,12 +38,16 @@ set.seed(123)
 
 ## Overview
 
-https://discuss.analyticsvidhya.com/t/how-to-remove-value-from-a-vector-in-r/2975/3
+Meghan Markle has been in headlines lately because she and Prince Harry sat down with Oprah Winfrey for an interview, detailing the factors behind their departure from the British royal family. To oversimplify, one key factor was the racist coverage Meghan received in British tabloids like the *Daily Mail* (examples [here](https://www.buzzfeednews.com/article/ellievhall/meghan-markle-kate-middleton-double-standards-royal). I wanted to use text analysis to explore how she was covered in recent *Daily Mail* articles.
+
+My analysis draws heavily from examples in [*Text Mining with R*](https://www.tidytextmining.com/) and our [class notes](https://cfss.uchicago.edu/syllabus/text-analysis-fundamentals-and-sentiment-analysis/).
 
 ## Getting & cleaning data
 
 You'll need to first run the [data_hw09.R](data_hw09.R) script to scrape data from the *Daily Mail* website.
-I created this scraping script outside of my hw09.Rmd file because the Daily Mail updates frequently, and I don't want to knit my .Rmd & end up running the scraping code (& thereby getting a totally different list of articles). 
+I created this scraping script outside of my hw09.Rmd file because the Daily Mail updates frequently, and I don't want to knit my .Rmd & end up running the scraping code (& thereby getting a totally different list of articles).
+
+I scraped the 80 article titles and previews (1st sentence of the article) available on Daily Mail's dedicated Meghan Markle index page on Mar. 10, 2021 around 6pm CT. 
 
 ```{r mail}
 # read in local copy of scraped data
@@ -53,56 +62,61 @@ tidy_mail <- almost_mail %>%
   pivot_wider(names_from = id, values_from = values)
 ```
 
-After starting my text analysis, it became clear that the 
+After starting my text analysis, it became clear that I didn't have enough text data to draw significant conclusions. I considered also scraping the individual articles by using the list of article titles I had initially scraped, but the newspaper article URLs on the Daily Mail have an identifier # alongside the article title (for example, the bolded region in this URL https://www.dailymail.co.uk/news/**article-9354687**/Piers-Morgan-slams-bullies-chat-Talk-shaming-Sharon-Osbourne.html). Thus, it was difficult to iterate a scraping process for a specified list of articles.
+
+I ended up continuing my text analysis with what I had, but it was helpful to remember that any techniques I used were limited in their effectiveness, given the dearth of data available. 
 
 ## Looking at word frequency 
 
-then can break the headline into tokens & look at sentiment. try and also find words correlated w/ Meghan Markle
-then do same thing for preview
+I decided to first check out the frequency of words in my data. 
 
 ```{r}
-# ORIGINAL - RUN THIS TO GET ORIGINAL combined_word df
 combined_word <- tidy_mail %>%
   unite(col = combined_text, title, preview, sep = ". ") %>% 
   #join title & preview columns 
   unnest_tokens(output = word, input = combined_text) %>%
   anti_join(stop_words) 
 
+# word frequency
+combined_word %>%
+  count(word, sort = TRUE)
+
 #trying stem 
-combined_word <- tidy_mail %>%
+stem_combined_word <- tidy_mail %>%
   unite(col = combined_text, title, preview, sep = ". ") %>% 
-  #join title & preview columns 
   unnest_tokens(output = word, input = combined_text) %>%
   anti_join(stop_words) %>%
   mutate(word = wordStem(word)) #stemming words
 
+# further cleaning up words by removing common stems
+common_stem <- c(
+  "meghan", "harri", "oprah", "interview", "markl", "meghan'", "princ", "royal")
+#not needed here: 
+# custom_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
 
-
-# word frequency
-combined_word %>%
-  count(word, sort = TRUE)
-# As expected, we can see Oprah's interview with Meghan Markle & Prince Harry dominate the headlines about Markle. Now I'm going to remove these names to try getting a better idea of the content
-
-# could delete this if end up using stems
-common_words <- c("meghan's", "harry's", "winfrey", "interview", "markle")
-#original list of common words: c("meghan", "markle", "meghan's", "harry's", "oprah", "interview")
-custom_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
-
-
-combined_word %>%
-#  filter(!word %in% common_words) %>%
+stem_combined_word %>%
+  filter(!word %in% common_stem) %>%
   count(word, sort = TRUE) %>%
-  filter(n > 5)
-
-# still not very informative
+  filter(n > 10) %>%
+  knitr::kable(
+    caption = "Frequent word stems in Daily Mail coverage", 
+    col.names = c(
+      "Word",
+      "Count"))
 ```
+
+As expected, this wasn't super illuminating since I was looking at only article titles and previews, i.e. the first things a reader sees that indicates what the article is about - so the majority mentioned Meghan Markle, Prince Harry, and their recent interview with Oprah. 
+
+I tried stemming the data (i.e. reducing words to a single stem/root) and then removing the stem form of these common names to see if I could get a better sense of what the Daily Mail was actually *saying* about Meghan Markle, but the limited data also hindered the effectiveness. Beyond the common words used to refer to the royal family, we do see that **skin** was a common word, indicating that the story of a royal family member asking about Archie's skin color was quite notable.
+
+I tried using both non-stemmed and stemmed data for the following text analyses and found that the stemmed data seemed to give more informative results (i.e. less repetitive info) for sentiment analysis. In all other following analyses, I settled upon using non-stemmed data for my final knitted doc. I'd probably be able to better assess the efficacy of non-stemmed vs stemmed data if, as noted earlier, I had more data to analyze. 
 
 ## Sentiment analysis
 
- https://www.tidytextmining.com/sentiment.html 
+I then attempted to look at the sentiment of the coverage of Meghan Markle. 
 
 ```{r}
-bing_word <- combined_word %>%
+bing_word <- stem_combined_word %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) 
 
@@ -110,7 +124,7 @@ bing_word %>%
   group_by(sentiment) %>%
   slice_head(n = 5) %>%
   ungroup() %>%
-  mutate(word = reorder(word, n)) %>%
+  mutate(word = as_factor(word), word = fct_reorder(word, n)) %>%
   ggplot(aes(n, word, fill = sentiment)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~sentiment, scales = "free_y") +
@@ -119,39 +133,45 @@ bing_word %>%
        x = "Contribution to sentiment",
        y = NULL)
 
-combined_word %>%
+stem_combined_word %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  # color reference: http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
   comparison.cloud(colors = c("tomato", "cadetblue1"), 
                    max.words = 30, title.bg.colors = c("tomato", "cadetblue1")) 
-# color reference: http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf
-  
 ```
+
+From both the bar graph and word cloud, we can see that the primary negative words referred to the racism and criticism that Markle faced. The most common positive word, support, likely referred to the general support that Markle received for her openness in the Oprah interview.  
+
+This of course doesn't help us to really understand the Daily Mail's coverage of Markle. Even a cursory scan of its headlines indicate that the tabloid was rather skeptical and dismissive of Markle. This problem can largely be attributed to the small amount of data available.
+
 
 ## Pairwise correlation
 
-drawn heavily from: https://www.tidytextmining.com/ngrams.html
-
-not affected by stemming - probably better if don't stem
+I then tried to find words correlated with Meghan and Harry to get an idea of how the Daily Mail described them.
 
 ```{r}
 word_cors <- combined_word %>%
   group_by(word) %>%
   filter(n() >= 20) %>%
   pairwise_cor(item = word, feature = recent_order, sort = TRUE)
-# looking at the common pairs of words co-appearing w/in each article (as defined by recent_order)
+# looking at the common pairs of words co-appearing w/in each article 
+# (as defined by recent_order)
 
 word_cors %>%
   filter(item1 %in% c("meghan", "harry")) %>%
   group_by(item1) %>%
+  mutate(item2 = as_factor(item2), item2 = fct_reorder(item2, correlation)) %>%
   slice_head(n = 6) %>%
   ungroup() %>%
-  mutate(item2 = reorder(item2, correlation)) %>%
-  ggplot(mapping = aes(x = item2, y = correlation)) +
+  ggplot(mapping = aes(x = item2, y = correlation, fill = item1)) +
   geom_col() +
   facet_wrap(~ item1, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  labs(title = "Correlated words with Harry & Meghan in Daily Mail articles", 
+       y = "Correlation", x = "") +
+  theme(legend.position = "none")
 
 word_cors %>%
   filter(correlation > .1) %>%
@@ -160,24 +180,25 @@ word_cors %>%
   geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
   geom_node_point(color = "lightblue", size = 5) +
   geom_node_text(aes(label = name), repel = TRUE) +
-  ggtitle("Word pairs with at least a correlation of .1 appearing in the same article")
-  theme_void()
+  ggtitle("Word pairs with at least a correlation of .1 
+          \nappearing in same Daily Mail article")
 ```
 
-not helpful. we're very limited in what we can do w/ just the title & 1st sent of an article, just not enough data to draw meaningful conclusions
+This technique also wasn't very helpful. The bar graph just tells us that, unsurprisingly, "Meghan" is correlated with "Markle." We also see negatively correlated terms, which indicates that if "Meghan" shows up in one article title/preview, a word like "prince" is more **unlikely** to show up. This is probably because of the brevity of our observations - if Meghan was already mentioned in an article's title, that's just less space to mention Prince Harry (and there likely isn't a need to mention Meghan's spouse as well, since the audience presumably already knows they're a couple). 
+The word cluster tells us similar things and seems like it'd be more helpful with more data. As represented by bold black lines, it correctly identified that Meghan Markle, Prince Harry, the royal family, and Oprah interview were common pairs in the articles scraped.
 
 ## Topic modeling (Latent Dirichlet allocation)
 
-https://cfss.uchicago.edu/notes/topic-modeling/
+Finally, I tried to see what potential topics the Daily Mail coverage on Markle could center on through Latent Dirichlet allocation (LDA).
 
 ```{r}
 mail_rec <- recipe(~., data = combined_word) %>%
-  step_tokenize(word) %>% # THIS TELLS R THIS IS A TOKEN LIST
-  step_ngram(word, num_tokens = 1, min_num_tokens = 1) %>%
-  step_tokenfilter(word, max_tokens = 1500) %>%
+  step_tokenize(word) %>% # this tells R word is a token list
+  step_ngram(word, num_tokens = 3, min_num_tokens = 1) %>%
+  step_tokenfilter(word, max_tokens = 2000) %>%
   step_tf(word)
 
-mail_prep <- prep(mail_rec, verbose = TRUE)
+mail_prep <- prep(mail_rec)
 
 mail_df <- bake(mail_prep, new_data = NULL) %>%
   select(-date) 
@@ -197,58 +218,26 @@ mail_lda4 <- LDA(mail_dtm, k = 6, control = list(seed = 123))
 top_terms_lda4 <- mail_lda4 %>%
   tidy() %>%
   group_by(topic) %>%
-  slice_max(n = 8, order_by = beta, with_ties = FALSE) %>% 
+  slice_max(n = 5, order_by = beta, with_ties = FALSE) %>% 
   # so it doesn't return all ties
   ungroup() %>%
   arrange(topic, -beta)
 
 top_terms_lda4 %>%
-  mutate(topic = factor(topic),
+  mutate(topic = as_factor(topic),
          term = reorder_within(term, beta, topic)) %>%
   ggplot(aes(term, beta, fill = topic)) +
-  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  geom_col(alpha = 0.8) +
   scale_x_reordered() +
   facet_wrap(~ topic, scales = "free", ncol = 3) +
   coord_flip() +
-  theme(text = element_text(size = 8))
-
+  theme(text = element_text(size = 8), legend.position = "") +
+  labs(title = "Topics of Daily Mail articles generated by LDA", x = "")
 ```
 
-best results thus far (though that isn't exactly hard). in this case, trying to do topic classification also gives idea of general content. 
+Ideally, trying topic classification here would give us an idea of the general content in the articles, but there is not data for this to helpful. The topics all look pretty similar, referencing Meghan Markle, Prince Harry, Oprah's interview, and the royal family. We're very limited in what we can do with just the title and 1st sentence of an article; no meaningful conclusions can be drawn.
 
-
-QUESTION - WHAT SHOULD I FILTER OUT BEFORE (I.E. MAKE STOPWORDS) & what should i keep?
-
-think about filtering out articles w/ Piers Morgan?
-we get "fearless" from ppl praising Morgan (& implicitly supporting his derogatory comments towards Markle)
-
-
-
-
-
-
-
-do something similar w/ Reddit jokes & see which words pop up most frequently, try to find the most common topics
-or also the correlated words -- think Hamilton? or Trump tweet examples
-
-
-```{r}
-vec_3.12_2pm <- read_html("https://www.dailymail.co.uk/tvshowbiz/meghan-markle/index.html") %>%
-  html_nodes(".sport span , #content p, .linkro-ccow, .linkro-darkred a") %>%
-  html_text() 
-
-vec_3.12_2pm <-
-  vec_3.12_2pm[c(-1, -400)] %>%
-  append(c("", ""), after = 2) 
-
-data_3.12_2pm <- vec_3.12_2pm %>%
-  split(ceiling(seq_along(vec_3.12_2pm)/5)) %>%
-  as_tibble()
-
-data_3.12_2pm %>%
-  write_csv("./data/mail_210312.2pm.csv")
-
-```
+In the future, such a text analysis would definitely require more data, but this was a good exercise in practicing the techniques. 
 
 ## Session info
 
