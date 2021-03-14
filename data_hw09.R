@@ -1,7 +1,9 @@
-# Scraping data for Daily Mail/Meghan Markle analysis
-# (aka for hw09.Rmd)
+# Scraping data for Daily Mail/Meghan Markle analysis (aka for hw09.Rmd)
+## doing this in a separate script since Daily Mail constantly updates site
 
-# doing this in a separate script since Daily Mail constantly updates site
+library(tidyverse)
+library(stringr)
+library(rvest)
 
 # create folder to store local copies of df
 dir.create("./data")

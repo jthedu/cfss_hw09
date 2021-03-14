@@ -12,10 +12,11 @@ output:
 ```{r, message = FALSE}
 library(tidyverse)
 library(stringr)
-library(rvest)
 library(glue)
 
 library(tidytext)
+#library(tokenizers)
+library(SnowballC)
 library(reshape2)
 library(wordcloud)
 library(widyr)
@@ -60,25 +61,36 @@ then can break the headline into tokens & look at sentiment. try and also find w
 then do same thing for preview
 
 ```{r}
+# ORIGINAL - RUN THIS TO GET ORIGINAL combined_word df
 combined_word <- tidy_mail %>%
   unite(col = combined_text, title, preview, sep = ". ") %>% 
   #join title & preview columns 
   unnest_tokens(output = word, input = combined_text) %>%
   anti_join(stop_words) 
 
+#trying stem 
+combined_word <- tidy_mail %>%
+  unite(col = combined_text, title, preview, sep = ". ") %>% 
+  #join title & preview columns 
+  unnest_tokens(output = word, input = combined_text) %>%
+  anti_join(stop_words) %>%
+  mutate(word = wordStem(word)) #stemming words
+
+
+
 # word frequency
 combined_word %>%
   count(word, sort = TRUE)
 # As expected, we can see Oprah's interview with Meghan Markle & Prince Harry dominate the headlines about Markle. Now I'm going to remove these names to try getting a better idea of the content
 
+# could delete this if end up using stems
 common_words <- c("meghan's", "harry's", "winfrey", "interview", "markle")
 #original list of common words: c("meghan", "markle", "meghan's", "harry's", "oprah", "interview")
-
 custom_stop <- bind_rows(tibble(word = common_words, lexicon = c("custom")), stop_words)
 
 
 combined_word %>%
-  filter(!word %in% common_words) %>%
+#  filter(!word %in% common_words) %>%
   count(word, sort = TRUE) %>%
   filter(n > 5)
 
@@ -121,6 +133,7 @@ combined_word %>%
 
 drawn heavily from: https://www.tidytextmining.com/ngrams.html
 
+not affected by stemming - probably better if don't stem
 
 ```{r}
 word_cors <- combined_word %>%
@@ -184,7 +197,7 @@ mail_lda4 <- LDA(mail_dtm, k = 6, control = list(seed = 123))
 top_terms_lda4 <- mail_lda4 %>%
   tidy() %>%
   group_by(topic) %>%
-  slice_max(n = 5, order_by = beta, with_ties = FALSE) %>% 
+  slice_max(n = 8, order_by = beta, with_ties = FALSE) %>% 
   # so it doesn't return all ties
   ungroup() %>%
   arrange(topic, -beta)
