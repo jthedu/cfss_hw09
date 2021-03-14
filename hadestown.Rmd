@@ -126,9 +126,6 @@ As can be expected from a musical about Hades, the overall sentiment is quite ne
 
 ## Correlated words
 
-same source as Markle file: https://www.tidytextmining.com/ngrams.html
-
-
 ```{r}
 custom_hades <- c("la", "gonna")
 

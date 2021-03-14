@@ -156,8 +156,6 @@ still quite negative because Orpheus ultimately fails to save Eurydice.
 
 ## Correlated words
 
-same source as Markle file: <https://www.tidytextmining.com/ngrams.html>
-
 ``` r
 custom_hades <- c("la", "gonna")
 
